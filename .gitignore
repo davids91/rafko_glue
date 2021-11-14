@@ -1,3 +1,5 @@
+external/*
+__pycache__/*
 # Prerequisites
 *.d
 
