@@ -3,17 +3,21 @@
 
 #include "scene/main/node.h"
 
+#include "rafko_protocol/common.pb.h"
+#include "rafko_protocol/rafko_net.pb.h"
 #include "rafko_gym/services/agent.h"
 #include "rafko_gym/services/environment.h"
+#include "rafko_gym/services/rafko_net_approximizer.h"
+#include "rafko_mainframe/models/service_context.h"
 
 #include <memory>
 
 class RafkoGlue : public Node {
   GDCLASS(RafkoGlue, Node);
 
-  class RafkoEnvironment : public Environment { /* why not rafko_gym::Environment ??? */
+  class RafkoGlueEnvironment : public rafko_gym::Environment {
     public:
-      RafkoEnvironment(RafkoGlue& parent_)
+      RafkoGlueEnvironment(RafkoGlue& parent_)
       : parent(parent_){ }
       sdouble32 full_evaluation(rafko_gym::Agent& agent){
         std::cout << "Full evaluation called!" << std::endl;
@@ -52,17 +56,28 @@ public:
 
   PoolRealArray get_env(); /* Provides input value for the network */
   void step(PoolRealArray net_output); /* Apply network output to the environment */
+  bool create_network(
+    int input_size, PoolVector<int> layer_numbers
+    /* TODO: PoolVector<rafko_net::Transfer_functions> layer_functions */
+  );
+  /* TODO: Load and save network */
 
   RafkoGlue(){
-    environment = std::make_unique<RafkoEnvironment>(*this);
+    environment = std::make_unique<RafkoGlueEnvironment>(*this);
   }
   ~RafkoGlue(){
     environment.reset();
+    if(network)network.reset();
+    if(optimizer)optimizer.reset();
   }
 protected:
   static void _bind_methods();
 private:
-  std::unique_ptr<RafkoEnvironment> environment;
+  rafko_mainframe::ServiceContext context;
+  std::unique_ptr<RafkoGlueEnvironment> environment;
+  std::unique_ptr<rafko_net::RafkoNet> network;
+  std::unique_ptr<rafko_gym::RafkoNetApproximizer> optimizer;
+
 };
 
 #endif /* RAFKO_GLUE_H */
