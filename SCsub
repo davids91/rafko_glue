@@ -3,4 +3,8 @@ Import('env')
 module_env = env.Clone()
 module_env.add_source_files(env.modules_sources, "*.cpp") # Add all cpp files to the build
 module_env.Append(CPPPATH=["external/rafko/include"]) # this is a relative path
-module_env.Append(CCFLAGS=['-lrafko_full']) # Append CCFLAGS flags for both C and C++ code.
+
+#Need to modify global env, to make the whole godot linkable with the custom library
+env.ParseConfig('pkg-config --cflags --libs protobuf')
+env.Append(LIBS=['rafko_full'])
+env.Append(LIBPATH=['#modules/rafko_glue/external/rafko/lib/'])

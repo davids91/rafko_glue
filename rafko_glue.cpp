@@ -5,6 +5,7 @@
 #include "rafko_net/services/rafko_net_builder.h"
 
 void RafkoGlue::_bind_methods() {
+  ClassDB::bind_method(D_METHOD("optimize_step"), &RafkoGlue::optimize_step);
   ClassDB::bind_method(D_METHOD("create_network"), &RafkoGlue::create_network);
   ClassDB::bind_method(D_METHOD("get_env"), &RafkoGlue::get_env);
   ClassDB::bind_method(D_METHOD("step"), &RafkoGlue::step);

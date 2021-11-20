@@ -5,31 +5,31 @@
 
 #include "rafko_protocol/common.pb.h"
 #include "rafko_protocol/rafko_net.pb.h"
-#include "rafko_gym/services/agent.h"
-#include "rafko_gym/services/environment.h"
+#include "rafko_gym/services/rafko_agent.h"
+#include "rafko_gym/services/rafko_environment.h"
 #include "rafko_gym/services/rafko_net_approximizer.h"
-#include "rafko_mainframe/models/service_context.h"
+#include "rafko_mainframe/models/rafko_service_context.h"
 
 #include <memory>
 
 class RafkoGlue : public Node {
   GDCLASS(RafkoGlue, Node);
 
-  class RafkoGlueEnvironment : public rafko_gym::Environment {
+  class RafkoGlueEnvironment : public rafko_gym::RafkoEnvironment {
     public:
       RafkoGlueEnvironment(RafkoGlue& parent_)
       : parent(parent_){ }
-      sdouble32 full_evaluation(rafko_gym::Agent& agent){
+      sdouble32 full_evaluation(rafko_gym::RafkoAgent& RafkoAgent){
         std::cout << "Full evaluation called!" << std::endl;
         return 0;
       }
-      sdouble32 stochastic_evaluation(rafko_gym::Agent& agent, uint32 seed = 0u){
+      sdouble32 stochastic_evaluation(rafko_gym::RafkoAgent& RafkoAgent, uint32 seed = 0u){
         Variant ret = parent.get_script_instance()->call(StringName("get_env"));
         // for(int i=0; i<5; ++i){
-        //   const rafko_utilities::DataRingbuffer& output = agent.solve(get_env(),(i == 0),/*thread_index:*/0);
+        //   const rafko_utilities::DataRingbuffer& output = RafkoAgent.solve(get_env(),(i == 0),/*thread_index:*/0);
         //   step(output.get_const_element(0)); /* This contains not only the output but the Neuron data */
         // }
-        /* evaluate agent */
+        /* evaluate RafkoAgent */
         PoolRealArray net_output;
         net_output.push_back(0.1);
         net_output.push_back(0.3);
@@ -61,6 +61,10 @@ public:
     /* TODO: PoolVector<rafko_net::Transfer_functions> layer_functions */
   );
   /* TODO: Load and save network */
+  void optimize_step(){
+    optimizer->collect_approximates_from_weight_gradients();
+    optimizer->apply_fragment();
+  }
 
   RafkoGlue(){
     environment = std::make_unique<RafkoGlueEnvironment>(*this);
@@ -73,7 +77,7 @@ public:
 protected:
   static void _bind_methods();
 private:
-  rafko_mainframe::ServiceContext context;
+  rafko_mainframe::RafkoServiceContext context;
   std::unique_ptr<RafkoGlueEnvironment> environment;
   std::unique_ptr<rafko_net::RafkoNet> network;
   std::unique_ptr<rafko_gym::RafkoNetApproximizer> optimizer;
