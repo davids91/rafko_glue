@@ -36,6 +36,11 @@ public:
   void pop_state(){
     get_script_instance()->call(StringName("pop_state"));
   }
+  double get_current_fitness(){
+    return get_script_instance()->call(StringName("get_current_fitness"));
+  }
+  void set_starting_state();
+  void set_evaluation_parameters(uint32 full_evaluation_loops, uint32 stochastic_evaluation_loops);
   /* --- OPTIMIZATION HOOKS --- */
 
   /* +++ NETWORK_HANDLING +++ */
@@ -43,11 +48,20 @@ public:
   /* TODO#2: include PoolVector<rafko_net::Transfer_functions> layer_functions */
   /* TODO#1: Load and save network */
   void optimize_step(){
-    if(optimizer){
-      optimizer->collect_approximates_from_weight_gradients();
-      optimizer->apply_fragment();
-      solver_deprecated = true;
-    }else store_error("Trying to optimize a non-existing network!");
+    if(ready()){
+      if(optimizer){
+        optimizer->collect_approximates_from_weight_gradients();
+        optimizer->apply_fragment();
+        solver_deprecated = true;
+      }else store_error("Trying to optimize a non-existing network!");
+    }else{
+      std::string s = (
+        "Trying to start optimization before the pre-requisites are met: "
+        +(start_state_set)?"":"Start state not set;"
+        +(eval_params_set)?"":"evaluation paramters not set nost set;"
+      );
+      store_error(s);
+    }
   }
   PoolRealArray calculate(PoolRealArray network_input, bool reset);
   /* --- NETWORK_HANDLING --- */
@@ -65,6 +79,10 @@ public:
     if(optimizer)optimizer.reset();
     if(solver)solver.reset();
   }
+
+  static PoolRealArray toPoolArray(const std::vector<double> vec);
+  static std::vector<double> toStdVec(const PoolRealArray arr);
+
 protected:
   static void _bind_methods();
 private:
@@ -78,14 +96,17 @@ private:
   bool solver_deprecated = true;
   std::string latest_error_message;
   int error_count;
+  bool start_state_set = false;
+  bool eval_params_set = false;
 
   void refresh_solver();
-  PoolRealArray toPoolArray(std::vector<double> vec);
-  std::vector<double> toStdVec(PoolRealArray arr);
-
   void store_error(std::string err){
     ++error_count;
     latest_error_message = "error[" + std::string(std::to_string(error_count)) + "]:" + err;
+  }
+
+  bool ready(){ /* Returns with true if everything is set to optimize! */
+    return(eval_params_set && start_state_set && network && optimizer);
   }
 };
 
