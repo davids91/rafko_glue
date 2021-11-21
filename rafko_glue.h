@@ -4,6 +4,7 @@
 #include "scene/main/node.h"
 
 #include <memory>
+#include <string>
 
 #include "rafko_protocol/common.pb.h"
 #include "rafko_protocol/rafko_net.pb.h"
@@ -12,6 +13,7 @@
 #include "rafko_gym/services/rafko_net_approximizer.h"
 #include "rafko_mainframe/models/rafko_service_context.h"
 #include "rafko_net/services/solution_solver.h"
+#include "rafko_utilities/models/data_ringbuffer.h"
 
 #include "rafko_glue_environment.h"
 
@@ -44,19 +46,15 @@ public:
     if(optimizer){
       optimizer->collect_approximates_from_weight_gradients();
       optimizer->apply_fragment();
-      solver_deprecated (true);
-    }
+      solver_deprecated = true;
+    }else store_error("Trying to optimize a non-existing network!");
   }
-
-  PoolRealArray calculate(PoolRealArray network_input, bool reset){
-    if(!network) return PoolRealArray();
-    if(solver_deprecated)refresh_solver();
-    return toPoolArray(
-      solver->solve(toStdVec(network_input), reset).get_const_element(0)
-    );
-  }
+  PoolRealArray calculate(PoolRealArray network_input, bool reset);
   /* --- NETWORK_HANDLING --- */
 
+  StringName get_latest_error_message(){
+    return StringName(latest_error_message.c_str());
+  }
   RafkoGlue(){
     /* TODO#3: Use arenas: (void)context.set_arena_ptr(&arena); */
     environment = std::make_unique<RafkoGlueEnvironment>(*this);
@@ -78,10 +76,17 @@ private:
   std::unique_ptr<rafko_net::Solution> solution;
   std::unique_ptr<rafko_net::SolutionSolver> solver;
   bool solver_deprecated = true;
+  std::string latest_error_message;
+  int error_count;
 
   void refresh_solver();
   PoolRealArray toPoolArray(std::vector<double> vec);
   std::vector<double> toStdVec(PoolRealArray arr);
+
+  void store_error(std::string err){
+    ++error_count;
+    latest_error_message = "error[" + std::string(std::to_string(error_count)) + "]:" + err;
+  }
 };
 
 #endif /* RAFKO_GLUE_H */
