@@ -3,85 +3,85 @@
 
 #include "scene/main/node.h"
 
-#include "rafko_protocol/common.pb.h"
-#include "rafko_protocol/rafko_net.pb.h"
-#include "rafko_gym/services/rafko_agent.h"
-#include "rafko_gym/services/rafko_environment.h"
-#include "rafko_gym/services/rafko_net_approximizer.h"
-#include "rafko_mainframe/models/rafko_service_context.h"
-
 #include <memory>
 
+#include "rafko_protocol/common.pb.h"
+#include "rafko_protocol/rafko_net.pb.h"
+#include "rafko_protocol/solution.pb.h"
+#include "rafko_gym/services/rafko_agent.h"
+#include "rafko_gym/services/rafko_net_approximizer.h"
+#include "rafko_mainframe/models/rafko_service_context.h"
+#include "rafko_net/services/solution_solver.h"
+
+#include "rafko_glue_environment.h"
+
+class RafkoGlueEnvironment;
 class RafkoGlue : public Node {
   GDCLASS(RafkoGlue, Node);
 
-  class RafkoGlueEnvironment : public rafko_gym::RafkoEnvironment {
-    public:
-      RafkoGlueEnvironment(RafkoGlue& parent_)
-      : parent(parent_){ }
-      sdouble32 full_evaluation(rafko_gym::RafkoAgent& RafkoAgent){
-        std::cout << "Full evaluation called!" << std::endl;
-        return 0;
-      }
-      sdouble32 stochastic_evaluation(rafko_gym::RafkoAgent& RafkoAgent, uint32 seed = 0u){
-        Variant ret = parent.get_script_instance()->call(StringName("get_env"));
-        // for(int i=0; i<5; ++i){
-        //   const rafko_utilities::DataRingbuffer& output = RafkoAgent.solve(get_env(),(i == 0),/*thread_index:*/0);
-        //   step(output.get_const_element(0)); /* This contains not only the output but the Neuron data */
-        // }
-        /* evaluate RafkoAgent */
-        PoolRealArray net_output;
-        net_output.push_back(0.1);
-        net_output.push_back(0.3);
-        net_output.push_back(0.5);
-
-        parent.get_script_instance()->call(StringName("step"), net_output);
-        std::cout << "Stochastic evaluation called!" << std::endl;
-        return 0;
-      }
-      void push_state(void){std::cout << "push state called!" << std::endl;}
-      sdouble32 get_training_fitness(void){
-        return 0;
-      }
-      sdouble32 get_testing_fitness(void){
-        return 0;
-      }
-      void pop_state(void){}
-    private:
-      RafkoGlue& parent;
-  };
-
 public:
-  void _init() {}
 
-  PoolRealArray get_env(); /* Provides input value for the network */
-  void step(PoolRealArray net_output); /* Apply network output to the environment */
-  bool create_network(
-    int input_size, PoolVector<int> layer_numbers
-    /* TODO: PoolVector<rafko_net::Transfer_functions> layer_functions */
-  );
-  /* TODO: Load and save network */
+  /* +++ OPTIMIZATION HOOKS +++ */
+  PoolRealArray provide_current_input_values(){ /* Provides input value for the network */
+    return get_script_instance()->call(StringName("provide_current_input_value"));
+  }
+  void apply_network_output(PoolRealArray net_output){ /* Apply network output to the environment */
+    get_script_instance()->call(StringName("apply_network_output"), net_output);
+  }
+  void push_state(){
+    get_script_instance()->call(StringName("push_state"));
+  }
+  void pop_state(){
+    get_script_instance()->call(StringName("pop_state"));
+  }
+  /* --- OPTIMIZATION HOOKS --- */
+
+  /* +++ NETWORK_HANDLING +++ */
+  bool create_network(int input_size, PoolVector<int> layer_numbers, double expected_input_range);
+  /* TODO#2: include PoolVector<rafko_net::Transfer_functions> layer_functions */
+  /* TODO#1: Load and save network */
   void optimize_step(){
-    optimizer->collect_approximates_from_weight_gradients();
-    optimizer->apply_fragment();
+    if(optimizer){
+      optimizer->collect_approximates_from_weight_gradients();
+      optimizer->apply_fragment();
+      solver_deprecated (true);
+    }
   }
 
+  PoolRealArray calculate(PoolRealArray network_input, bool reset){
+    if(!network) return PoolRealArray();
+    if(solver_deprecated)refresh_solver();
+    return toPoolArray(
+      solver->solve(toStdVec(network_input), reset).get_const_element(0)
+    );
+  }
+  /* --- NETWORK_HANDLING --- */
+
   RafkoGlue(){
+    /* TODO#3: Use arenas: (void)context.set_arena_ptr(&arena); */
     environment = std::make_unique<RafkoGlueEnvironment>(*this);
   }
   ~RafkoGlue(){
     environment.reset();
     if(network)network.reset();
     if(optimizer)optimizer.reset();
+    if(solver)solver.reset();
   }
 protected:
   static void _bind_methods();
 private:
+  /* TODO#3: Use arenas: google::protobuf::Arena arena; */
   rafko_mainframe::RafkoServiceContext context;
   std::unique_ptr<RafkoGlueEnvironment> environment;
   std::unique_ptr<rafko_net::RafkoNet> network;
   std::unique_ptr<rafko_gym::RafkoNetApproximizer> optimizer;
+  std::unique_ptr<rafko_net::Solution> solution;
+  std::unique_ptr<rafko_net::SolutionSolver> solver;
+  bool solver_deprecated = true;
 
+  void refresh_solver();
+  PoolRealArray toPoolArray(std::vector<double> vec);
+  std::vector<double> toStdVec(PoolRealArray arr);
 };
 
 #endif /* RAFKO_GLUE_H */
