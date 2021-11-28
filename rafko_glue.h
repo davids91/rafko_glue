@@ -25,7 +25,7 @@ public:
 
   /* +++ OPTIMIZATION HOOKS +++ */
   PoolRealArray provide_current_input_values(){ /* Provides input value for the network */
-    return get_script_instance()->call(StringName("provide_current_input_value"));
+    return get_script_instance()->call(StringName("provide_current_input_values"));
   }
   void apply_network_output(PoolRealArray net_output){ /* Apply network output to the environment */
     get_script_instance()->call(StringName("apply_network_output"), net_output);

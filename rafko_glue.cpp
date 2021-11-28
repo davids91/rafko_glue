@@ -5,7 +5,7 @@
 
 #include "rafko_net/services/rafko_net_builder.h"
 #include "rafko_net/services/solution_builder.h"
-
+#include "rafko_utilities/models/const_vector_subrange.h"
 
 void RafkoGlue::_bind_methods() {
   ClassDB::bind_method(D_METHOD("get_latest_error_message"), &RafkoGlue::get_latest_error_message);
@@ -16,6 +16,7 @@ void RafkoGlue::_bind_methods() {
   ClassDB::bind_method(D_METHOD("optimize_step"), &RafkoGlue::optimize_step);
   ClassDB::bind_method(D_METHOD("get_current_fitness"), &RafkoGlue::get_current_fitness);
   ClassDB::bind_method(D_METHOD("set_starting_state"), &RafkoGlue::set_starting_state);
+  ClassDB::bind_method(D_METHOD("set_evaluation_parameters"), &RafkoGlue::set_evaluation_parameters);
   ClassDB::bind_method(D_METHOD("push_state"), &RafkoGlue::push_state);
   ClassDB::bind_method(D_METHOD("pop_state"), &RafkoGlue::pop_state);
 }
@@ -46,18 +47,17 @@ void RafkoGlue::refresh_solver(){
 }
 
 bool RafkoGlue::create_network(int input_size, PoolVector<int> layer_numbers, double expected_input_range) {
-  if(network)network.reset();
-
   /* Build Transfer_functions and layer sizes layers */
   std::vector<unsigned int> layer_structure(layer_numbers.size());
   std::vector<std::vector<rafko_net::Transfer_functions>> layer_transfers(
     layer_numbers.size(), {rafko_net::transfer_function_selu}
   );
-  
+
   for(int i=0; i<layer_numbers.size();++i){
     layer_structure[i] = layer_numbers[i];
   }
 
+  if(network)network.reset();
   network = std::unique_ptr<rafko_net::RafkoNet>(
     rafko_net::RafkoNetBuilder(context)
     .input_size(input_size)
@@ -66,6 +66,7 @@ bool RafkoGlue::create_network(int input_size, PoolVector<int> layer_numbers, do
     .dense_layers(layer_structure)
   );
 
+  if(optimizer)optimizer.reset();
   optimizer = std::make_unique<rafko_gym::RafkoNetApproximizer>(
     context, *network, *environment, rafko_net::weight_updater_amsgrad
   );
@@ -81,13 +82,10 @@ PoolRealArray RafkoGlue::calculate(PoolRealArray network_input, bool reset){
     if(!network) return PoolRealArray();
     if(solver_deprecated)refresh_solver();
     std::vector<double> inputs = toStdVec(network_input);
-    const rafko_utilities::DataRingbuffer& result = solver->solve(
+    rafko_utilities::ConstVectorSubrange<> result = solver->solve(
       {inputs.begin(), inputs.begin() + network->input_data_size()}, reset
     );
-    return toPoolArray({
-      result.get_const_element(0).end() - network->output_neuron_number(),
-      result.get_const_element(0).end()
-    });
+    return toPoolArray({ result.begin(), result.end() });
   }else store_error("Trying to calculate a non-existing network!");
 
   return PoolRealArray();
