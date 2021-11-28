@@ -31,9 +31,9 @@ public:
   void push_state();
   void pop_state();
   double get_current_fitness();
-  void set_starting_state();
   void set_evaluation_parameters(uint32 full_evaluation_loops, uint32 stochastic_evaluation_loops);
   void notify_actions_processed();
+  void notify_pop_processed();
   /* --- OPTIMIZATION HOOKS --- */
 
   /* +++ NETWORK_HANDLING +++ */
@@ -73,7 +73,6 @@ private:
   std::unique_ptr<rafko_net::SolutionSolver> solver;
   std::string latest_error_message;
   int error_count;
-  bool start_state_set = false;
   bool eval_params_set = false;
 
   std::mutex optimization_control_mutex;
@@ -94,7 +93,7 @@ private:
   }
 
   bool ready(){ /* Returns with true if everything is set to optimize! */
-    return(eval_params_set && start_state_set && network && optimizer);
+    return(eval_params_set && network && optimizer);
   }
 };
 

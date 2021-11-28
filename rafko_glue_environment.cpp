@@ -3,14 +3,13 @@
 #include "rafko_utilities/models/const_vector_subrange.h"
 
 void RafkoGlueEnvironment::notify_actions_processed(){
-    std::lock_guard<std::mutex> my_lock(processed_feedback_mutex);
-    feedback_processed = true;
-    synchroniser.notify_one(); /* Only one thread is waiting for this */
+  std::lock_guard<std::mutex> my_lock(processed_feedback_mutex);
+  feedback_processed = true;
+  synchroniser.notify_one(); /* Only one thread is waiting for this */
 }
 
 sdouble32 RafkoGlueEnvironment::evaluation_function(rafko_gym::RafkoAgent& agent, int loops_to_do){
-  pop_state();
-  push_state(); /* restore start state, and save it */
+  std::cout << "[e]-->\t eval function started!" << std::endl;
   sdouble32 fitness = parent.get_current_fitness();
   for(int i=0; i<loops_to_do; ++i){
     std::vector<double> vec = RafkoGlue::toStdVec(parent.provide_current_input_values());
@@ -24,27 +23,38 @@ sdouble32 RafkoGlueEnvironment::evaluation_function(rafko_gym::RafkoAgent& agent
     std::unique_lock<std::mutex> my_lock(processed_feedback_mutex);
     feedback_processed = false;
     synchroniser.wait(my_lock, [&](){return feedback_processed;});
+    std::cout << "~" << std::flush;
   }
+  std::cout << std::endl;
   fitness = parent.get_current_fitness() - fitness; /* return the delta */
-  pop_state();
+  std::cout << "[e]-->\t Fitness from "<< loops_to_do <<" loops:  " << fitness << std::endl;
   return fitness;
 }
 
-
 sdouble32 RafkoGlueEnvironment::full_evaluation(rafko_gym::RafkoAgent& agent){
-  return evaluation_function(full_run_loops, agent);
+  sdouble32 current_fitness = evaluation_function(agent, full_run_loops);
+  testing_fitness = (testing_fitness + current_fitness)/2.0;
+  return current_fitness;
 }
 
 sdouble32 RafkoGlueEnvironment::stochastic_evaluation(rafko_gym::RafkoAgent& agent, uint32 seed){
-  return evaluation_function(stochastic_run_loops, agent);
+  sdouble32 current_fitness = evaluation_function(agent, stochastic_run_loops);
+  training_fitness = (training_fitness + current_fitness)/2.0;
+  return current_fitness;
 }
 
 sdouble32 RafkoGlueEnvironment::get_training_fitness(void){
-  return 0;
+  return training_fitness;
 }
 
 sdouble32 RafkoGlueEnvironment::get_testing_fitness(void){
-  return 0;
+  return testing_fitness;
+}
+
+void RafkoGlueEnvironment::notify_pop_processed(){
+  std::lock_guard<std::mutex> my_lock(processed_pop_mutex);
+  pop_processed = true;
+  pop_synchroniser.notify_one(); /* Only one thread is waiting for this */
 }
 
 void RafkoGlueEnvironment::push_state(void){
@@ -54,8 +64,10 @@ void RafkoGlueEnvironment::push_state(void){
 void RafkoGlueEnvironment::pop_state(void){
   parent.pop_state();
   {
-    std::unique_lock<std::mutex> my_lock(processed_feedback_mutex);
-    feedback_processed = false;
-    synchroniser.wait(my_lock, [&](){return feedback_processed;});
+    std::unique_lock<std::mutex> my_lock(processed_pop_mutex);
+    std::cout << "[e]-->\t Pop state waiting to notify!" << std::endl;
+    pop_processed = false;
+    pop_synchroniser.wait(my_lock, [&](){return pop_processed;});
+    std::cout << "[e]-->\t Pop state notified!" << std::endl;
   }
 }

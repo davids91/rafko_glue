@@ -24,6 +24,7 @@ class RafkoGlueEnvironment : public rafko_gym::RafkoEnvironment {
     void push_state();
     void pop_state();
     void notify_actions_processed();
+    void notify_pop_processed();
 
     void set_evaluation_parameters(int full_run_loops_, int stochastic_run_loops_){
       full_run_loops = full_run_loops_;
@@ -34,9 +35,17 @@ class RafkoGlueEnvironment : public rafko_gym::RafkoEnvironment {
     RafkoGlue& parent;
     int stochastic_run_loops = 15;
     int full_run_loops = 100;
-    std::condition_variable synchroniser;
+
     std::mutex processed_feedback_mutex;
+    std::condition_variable synchroniser;
     bool feedback_processed = false;
+    uint32 training_fitness = 0;
+    uint32 testing_fitness = 0;
+
+    std::mutex processed_pop_mutex;
+    std::condition_variable pop_synchroniser;
+    bool pop_processed = false;
+
 
     sdouble32 evaluation_function(rafko_gym::RafkoAgent& agent, int loops_to_do);
 

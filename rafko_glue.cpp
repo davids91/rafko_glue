@@ -17,9 +17,9 @@ void RafkoGlue::_bind_methods() {
   ClassDB::bind_method(D_METHOD("start_optimization"), &RafkoGlue::start_optimization);
   ClassDB::bind_method(D_METHOD("stop_optimization"), &RafkoGlue::stop_optimization);
   ClassDB::bind_method(D_METHOD("get_current_fitness"), &RafkoGlue::get_current_fitness);
-  ClassDB::bind_method(D_METHOD("set_starting_state"), &RafkoGlue::set_starting_state);
   ClassDB::bind_method(D_METHOD("set_evaluation_parameters"), &RafkoGlue::set_evaluation_parameters);
   ClassDB::bind_method(D_METHOD("notify_actions_processed"), &RafkoGlue::notify_actions_processed);
+  ClassDB::bind_method(D_METHOD("notify_pop_processed"), &RafkoGlue::notify_pop_processed);
   ClassDB::bind_method(D_METHOD("push_state"), &RafkoGlue::push_state);
   ClassDB::bind_method(D_METHOD("pop_state"), &RafkoGlue::pop_state);
 }
@@ -44,11 +44,6 @@ double RafkoGlue::get_current_fitness(){
   return get_script_instance()->call(StringName("get_current_fitness"));
 }
 
-void RafkoGlue::set_starting_state(){
-  environment->push_state();
-  start_state_set = true;
-}
-
 void RafkoGlue::set_evaluation_parameters(uint32 full_evaluation_loops, uint32 stochastic_evaluation_loops){
   environment->set_evaluation_parameters(full_evaluation_loops, stochastic_evaluation_loops);
   eval_params_set = true;
@@ -58,8 +53,13 @@ void RafkoGlue::notify_actions_processed(){
   environment->notify_actions_processed();
 }
 
+void RafkoGlue::notify_pop_processed(){
+  environment->notify_pop_processed();
+}
+
 void RafkoGlue::stop_optimization(){
   std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
+  std::cout << "Stop opt requested!" << std::endl;
   if(do_optimization){
     do_optimization = false;
     synchroniser.notify_one();
@@ -71,6 +71,7 @@ void RafkoGlue::start_optimization(){
     if(optimizer){
       {
         std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
+        std::cout << "Start opt requested!" << std::endl;
         do_optimization = true;
         synchroniser.notify_one();
       }
@@ -78,7 +79,6 @@ void RafkoGlue::start_optimization(){
   }else{
     std::string s = (
       "Trying to start optimization before the pre-requisites are met: "
-      +(start_state_set)?"":"Start state not set;"
       +(eval_params_set)?"":"evaluation paramters not set nost set;"
     );
     store_error(s);
@@ -93,6 +93,7 @@ void RafkoGlue::optimize_thread_function(){
     if(local_do_optimization){
       {
         std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
+        std::cout << "[g]-->\tAn iteration started!" << std::endl;
         optimization_in_progress = true;
       }
 
@@ -103,6 +104,7 @@ void RafkoGlue::optimize_thread_function(){
       }
       {
         std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
+        std::cout << "[g]-->\tAn iteration finished!" << std::endl;
         solver_deprecated = true;
         if(!local_do_optimization)optimization_in_progress = false;
       }
