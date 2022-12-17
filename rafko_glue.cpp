@@ -2,157 +2,45 @@
 
 #include <vector>
 #include <cmath>
-#include <thread>
+#include <optional>
 
-#include "rafko_net/services/rafko_net_builder.h"
-#include "rafko_net/services/solution_builder.h"
-#include "rafko_utilities/models/const_vector_subrange.h"
+#include "rafko_net/services/rafko_net_builder.hpp"
+#include "rafko_net/services/solution_builder.hpp"
+#include "rafko_utilities/models/const_vector_subrange.hpp"
+
+namespace {
+  PackedFloat32Array toPoolArray(const std::vector<double>& vec){
+    PackedFloat32Array result;
+    for(const double& element : vec)result.push_back(element);
+    return result;
+  }
+
+  std::vector<double> toStdVec(const PackedFloat32Array& arr){
+    std::vector<double> result;
+    for(int i = 0; i < arr.size(); ++i){
+      result.push_back(arr[i]);
+    }
+    return result;
+  }
+} /* namespace */
 
 void RafkoGlue::_bind_methods() {
-  ClassDB::bind_method(D_METHOD("get_latest_error_message"), &RafkoGlue::get_latest_error_message);
-  ClassDB::bind_method(D_METHOD("create_network"), &RafkoGlue::create_network);
-  ClassDB::bind_method(D_METHOD("provide_current_input_values"), &RafkoGlue::provide_current_input_values);
-  ClassDB::bind_method(D_METHOD("apply_network_output"), &RafkoGlue::apply_network_output);
+  ClassDB::bind_method(D_METHOD("configure_network"), &RafkoGlue::configure_network);
+  ClassDB::bind_method(D_METHOD("configure_environment"), &RafkoGlue::configure_environment);
+  ClassDB::bind_method(D_METHOD("configure_trainer"), &RafkoGlue::configure_trainer);
   ClassDB::bind_method(D_METHOD("calculate"), &RafkoGlue::calculate);
-  ClassDB::bind_method(D_METHOD("start_optimization"), &RafkoGlue::start_optimization);
-  ClassDB::bind_method(D_METHOD("stop_optimization"), &RafkoGlue::stop_optimization);
-  ClassDB::bind_method(D_METHOD("get_current_fitness"), &RafkoGlue::get_current_fitness);
-  ClassDB::bind_method(D_METHOD("set_evaluation_parameters"), &RafkoGlue::set_evaluation_parameters);
-  ClassDB::bind_method(D_METHOD("notify_actions_processed"), &RafkoGlue::notify_actions_processed);
-  ClassDB::bind_method(D_METHOD("notify_pop_processed"), &RafkoGlue::notify_pop_processed);
-  ClassDB::bind_method(D_METHOD("push_state"), &RafkoGlue::push_state);
-  ClassDB::bind_method(D_METHOD("pop_state"), &RafkoGlue::pop_state);
+  ClassDB::bind_method(D_METHOD("iterate"), &RafkoGlue::iterate);
+  ClassDB::bind_method(D_METHOD("reset_environment"), &RafkoGlue::reset_environment);
+  ClassDB::bind_method(D_METHOD("feed_current_state"), &RafkoGlue::feed_current_state);
+  ClassDB::bind_method(D_METHOD("feed_next_state"), &RafkoGlue::feed_next_state);
+  ClassDB::bind_method(D_METHOD("feed_consequences"), &RafkoGlue::feed_consequences);
 }
 
-PoolRealArray RafkoGlue::provide_current_input_values(){ /* Provides input value for the network */
-  return get_script_instance()->call(StringName("provide_current_input_values"));
-}
-
-void RafkoGlue::apply_network_output(PoolRealArray net_output){ /* Apply network output to the environment */
-  get_script_instance()->call(StringName("apply_network_output"), net_output);
-}
-
-void RafkoGlue::push_state(){
-  get_script_instance()->call(StringName("push_state"));
-}
-
-void RafkoGlue::pop_state(){
-  get_script_instance()->call(StringName("pop_state"));
-}
-
-double RafkoGlue::get_current_fitness(){
-  return get_script_instance()->call(StringName("get_current_fitness"));
-}
-
-void RafkoGlue::set_evaluation_parameters(uint32 full_evaluation_loops, uint32 stochastic_evaluation_loops){
-  environment->set_evaluation_parameters(full_evaluation_loops, stochastic_evaluation_loops);
-  eval_params_set = true;
-}
-
-void RafkoGlue::notify_actions_processed(){
-  environment->notify_actions_processed();
-}
-
-void RafkoGlue::notify_pop_processed(){
-  environment->notify_pop_processed();
-}
-
-void RafkoGlue::stop_optimization(){
-  std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-  std::cout << "Stop opt requested!" << std::endl;
-  if(do_optimization){
-    do_optimization = false;
-    synchroniser.notify_one();
-  }
-}
-
-void RafkoGlue::start_optimization(){
-  if(ready()){
-    if(optimizer){
-      {
-        std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-        std::cout << "Start opt requested!" << std::endl;
-        do_optimization = true;
-        synchroniser.notify_one();
-      }
-    }else store_error("Trying to optimize a non-existing network!");
-  }else{
-    std::string s = (
-      "Trying to start optimization before the pre-requisites are met: "
-      +(eval_params_set)?"":"evaluation paramters not set nost set;"
-    );
-    store_error(s);
-  }
-}
-
-void RafkoGlue::optimize_thread_function(){
-  bool local_do_optimization = false;
-  bool local_continue_running = true;
-  while(local_continue_running)
-  {
-    if(local_do_optimization){
-      {
-        std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-        std::cout << "[g]-->\tAn iteration started!" << std::endl;
-        optimization_in_progress = true;
-      }
-
-      {
-        std::lock_guard<std::mutex> my_lock(network_mutex);
-        optimizer->collect_approximates_from_weight_gradients();
-        optimizer->apply_fragment();
-      }
-      {
-        std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-        std::cout << "[g]-->\tAn iteration finished!" << std::endl;
-        solver_deprecated = true;
-        if(!local_do_optimization)optimization_in_progress = false;
-      }
-    }/*if(do_optimization)*/
-    {
-      std::unique_lock<std::mutex> my_lock(optimization_control_mutex);
-      local_do_optimization = do_optimization;
-      local_continue_running = continue_running;
-      if((!local_do_optimization)&&(local_continue_running)){
-        synchroniser.wait(my_lock, [&](){
-          local_do_optimization = do_optimization;
-          local_continue_running = continue_running;
-          return (do_optimization || (!continue_running));
-        });
-      }
-    }
-  }/* while(continue_running) */
-}
-
-void RafkoGlue::refresh_solver(){
-  if(network){
-    if(solver)solver.reset();
-    if(solution)solution.reset();
-
-    {
-      std::lock_guard<std::mutex> my_lock(network_mutex);
-      solution = std::unique_ptr<rafko_net::Solution>(
-        rafko_net::SolutionBuilder(context).build(*network)
-      );
-    }
-
-    solver = std::unique_ptr<rafko_net::SolutionSolver>(
-      rafko_net::SolutionSolver::Builder(*solution, context).build()
-    );
-
-    {
-      std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-      solver_deprecated = false;
-    }
-  }else store_error("Trying to build a Solution for a non-existing network!");
-}
-
-bool RafkoGlue::create_network(int input_size, PoolVector<int> layer_numbers, double expected_input_range) {
-  stop_optimization();
+bool RafkoGlue::configure_network(int input_size, PackedInt32Array layer_numbers, double expected_input_range) {
 
   /* Build Transfer_functions and layer sizes layers */
   std::vector<unsigned int> layer_structure(layer_numbers.size());
-  std::vector<std::vector<rafko_net::Transfer_functions>> layer_transfers(
+  std::vector<std::set<rafko_net::Transfer_functions>> layer_transfers(
     layer_numbers.size(), {rafko_net::transfer_function_selu}
   );
 
@@ -160,85 +48,101 @@ bool RafkoGlue::create_network(int input_size, PoolVector<int> layer_numbers, do
     layer_structure[i] = layer_numbers[i];
   }
 
-  if(network){ /* Already have a network! */
-    {
-      std::unique_lock<std::mutex> my_lock(optimization_control_mutex);
-      do_optimization = false;
-    }
-    bool local_optimization_in_progress = true;
-    while(local_optimization_in_progress){ /*TODO#4:Eliminate busy waiting! */
-      {
-        std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-        local_optimization_in_progress = optimization_in_progress;
-      }
-    }
-    network.reset();
+  rafko_net::RafkoNetBuilder network_builder = rafko_net::RafkoNetBuilder(*m_settings)
+  .input_size(input_size)
+  .expected_input_range(std::abs(expected_input_range))
+  .allowed_transfer_functions_by_layer(layer_transfers);
+  if(m_networkPtr)
+    m_networkPtr = network_builder.create_layers(layer_structure);
+    else network_builder.build_create_layers_and_swap(m_networkPtr, layer_structure);
+
+  m_solverDeprecated = true;
+
+  if(m_environment){
+    bool retval = network_matches_environment();
+    if(!retval)log_error("Network and environment sizes don't match!");
+    return retval;
   }
-  network = std::unique_ptr<rafko_net::RafkoNet>(
-    rafko_net::RafkoNetBuilder(context)
-    .input_size(input_size)
-    .expected_input_range(std::abs(expected_input_range))
-    .allowed_transfer_functions_by_layer(layer_transfers)
-    .dense_layers(layer_structure)
-  );
-
-  if(optimizer)optimizer.reset();
-  optimizer = std::make_unique<rafko_gym::RafkoNetApproximizer>(
-    context, *network, *environment, rafko_net::weight_updater_amsgrad
-  );
-
   return true;
 }
 
-PoolRealArray RafkoGlue::calculate(PoolRealArray network_input, bool reset){
-  if(network){
-    if(network_input.size() < static_cast<sint32>(network->input_data_size())){
-      latest_error_message = "Not enough input provided for network!";
-      return PoolRealArray();
-    }
-    if(!network) return PoolRealArray();
-    bool local_solver_deprecated;
-    {
-      std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-      local_solver_deprecated = solver_deprecated;
-    }
-    if(local_solver_deprecated)refresh_solver();
-    std::vector<double> inputs = toStdVec(network_input);
-    rafko_utilities::ConstVectorSubrange<> result = solver->solve(
-      {inputs.begin(), inputs.begin() + network->input_data_size()}, reset
+bool RafkoGlue::configure_environment(
+  int state_size, double state_mean, double state_stddev,
+  int action_size, double action_mean, double action_stddev
+){
+  m_environment = std::make_unique<Environment>(
+    *this, state_size, state_mean, state_stddev,
+    action_size, action_mean, action_stddev
+  );
+  if(m_networkPtr){
+    bool retval = network_matches_environment();
+    if(!retval)log_error("Network and environment sizes don't match!");
+    return retval;
+  }
+  return static_cast<bool>(m_environment);
+}
+
+
+bool RafkoGlue::configure_trainer(int action_count, int q_set_size){
+  if(!network_matches_environment()){
+    log_error("Network and environment sizes don't match!");
+    return false;
+  }
+  m_trainer = std::make_unique<rafko_gym::RafQTrainer>(
+    *m_networkPtr, action_count, q_set_size, m_environment, m_objective, m_settings
+  );
+  return true;
+}
+
+PackedFloat32Array RafkoGlue::calculate(PackedFloat32Array network_input, bool reset){
+  if(!m_networkPtr){
+    log_error("Trying to calculate a non-existing network!");
+    return PackedFloat32Array();
+  }
+
+  if(network_input.size() != static_cast<std::int32_t>(m_networkPtr->input_data_size())){
+    log_error(
+      "Input size mismatch! Network: " + std::to_string(m_networkPtr->input_data_size())
+      + "; vs provided Input: " + std::to_string(network_input.size())
     );
-    return toPoolArray({ result.begin(), result.end() });
-  }else store_error("Trying to calculate a non-existing network!");
-
-  return PoolRealArray();
-}
-
-RafkoGlue::~RafkoGlue(){
-  stop_optimization();
-
-  {
-    std::lock_guard<std::mutex> my_lock(optimization_control_mutex);
-    continue_running = false;
-    synchroniser.notify_one();
+    return PackedFloat32Array();
   }
-  optimize_thread.join();
 
-  environment.reset();
-  if(network)network.reset(); /* At this point optimization is stopped so no need to use net mutex */
-  if(optimizer)optimizer.reset();
-  if(solver)solver.reset();
-}
-
-PoolRealArray RafkoGlue::toPoolArray(std::vector<double> vec){
-  PoolRealArray result;
-  for(double& element : vec)result.push_back(element);
-  return result;
-}
-
-std::vector<double> RafkoGlue::toStdVec(PoolRealArray arr){
-  std::vector<double> result;
-  for(int i = 0; i < arr.size(); ++i){
-    result.push_back(arr[i]);
+  if(m_solverDeprecated){
+    m_agent = rafko_net::SolutionSolver::Factory(*m_networkPtr, m_settings).build();
+    m_solverDeprecated = false;
   }
-  return result;
+
+  return toPoolArray(m_agent->solve(toStdVec(network_input), reset).acquire());
 }
+
+RafkoGlue::Environment::MaybeFeatureVector RafkoGlue::Environment::current_state() const{
+  PackedFloat32Array data = m_parent.feed_current_state();
+  if(0 == data.size())
+    return {};
+    else{
+      m_currentStateBuffer = toStdVec(data);
+      return {m_currentStateBuffer};
+    }
+}
+
+RafkoGlue::Environment::StateTransition RafkoGlue::Environment::next(FeatureView action){
+  Dictionary data = m_parent.feed_next_state(toPoolArray(action.acquire()));
+  MaybeFeatureVector next_state;
+  if(0 < static_cast<PackedFloat32Array>(data["state"]).size()){
+    m_currentStateBuffer = toStdVec(static_cast<PackedFloat32Array>(data["state"]));
+    next_state.emplace(m_currentStateBuffer);
+  }
+  return {next_state, static_cast<double>(data["q-value"]), static_cast<bool>(data["terminal"])};
+}
+
+RafkoGlue::Environment::StateTransition RafkoGlue::Environment::next(FeatureView state, FeatureView action) const{
+  Dictionary data = m_parent.feed_consequences(toPoolArray(state.acquire()), toPoolArray(action.acquire()));
+  MaybeFeatureVector next_state;
+  if(0 < static_cast<PackedFloat32Array>(data["state"]).size()){
+    m_queryStateBuffer = toStdVec(static_cast<PackedFloat32Array>(data["state"]));
+    next_state.emplace(m_queryStateBuffer);
+  }
+  return {next_state, static_cast<double>(data["q-value"]), static_cast<bool>(data["terminal"])};
+}
+

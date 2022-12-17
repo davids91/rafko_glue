@@ -2,9 +2,10 @@ Import('env')
 
 module_env = env.Clone()
 module_env.add_source_files(env.modules_sources, "*.cpp") # Add all cpp files to the build
-module_env.Append(CPPPATH=["external/rafko/include"]) # this is a relative path
+module_env.Append(CPPPATH=["lib/rafko/include"]) # this is a relative path
 
-#Need to modify global env, to make the whole godot linkable with the custom library
+# Adding dependencies
+# need to modify global env, to make the whole project linkable with the custom library
 env.ParseConfig('pkg-config --cflags --libs protobuf')
-env.Append(LIBS=['rafko_full'])
-env.Append(LIBPATH=['#modules/rafko_glue/external/rafko/lib/'])
+env.Append(LIBS=['rafko','OpenCL'])
+env.Append(LIBPATH=['#modules/rafko_glue/lib/rafko/lib/'])

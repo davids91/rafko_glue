@@ -5,96 +5,123 @@
 
 #include <memory>
 #include <string>
-#include <mutex>
-#include <condition_variable>
 
-#include "rafko_protocol/common.pb.h"
 #include "rafko_protocol/rafko_net.pb.h"
-#include "rafko_protocol/solution.pb.h"
-#include "rafko_gym/services/rafko_agent.h"
-#include "rafko_gym/services/rafko_net_approximizer.h"
-#include "rafko_mainframe/models/rafko_service_context.h"
-#include "rafko_net/services/solution_solver.h"
-#include "rafko_utilities/models/data_ringbuffer.h"
+#include "rafko_protocol/training.pb.h"
+#include "rafko_mainframe/models/rafko_autonomous_entity.hpp"
+#include "rafko_gym/models/rafq_environment.hpp"
+#include "rafko_gym/models/rafko_objective.hpp"
+#include "rafko_gym/models/rafko_cost.hpp"
+#include "rafko_gym/services/rafq_trainer.hpp"
+#include "rafko_net/services/solution_solver.hpp"
 
-#include "rafko_glue_environment.h"
 
-class RafkoGlueEnvironment;
-class RafkoGlue : public Node {
+// TODO: set Objective
+// TODO: include PoolVector<rafko_net::Transfer_functions> layer_functions
+// TODO: Load and save network
+class RafkoGlue : public Node, public rafko_mainframe::RafkoAutonomousEntity
+{
   GDCLASS(RafkoGlue, Node);
-
+  using RafQEnvironment = rafko_gym::RafQEnvironment;
+  class Environment;
 public:
+  RafkoGlue() : Node(), rafko_mainframe::RafkoAutonomousEntity(){}
+  ~RafkoGlue() = default;
 
-  /* +++ OPTIMIZATION HOOKS +++ */
-  PoolRealArray provide_current_input_values(); /* Provides input value for the network */
-  void apply_network_output(PoolRealArray net_output); /* Apply network output to the environment */
-  void push_state();
-  void pop_state();
-  double get_current_fitness();
-  void set_evaluation_parameters(uint32 full_evaluation_loops, uint32 stochastic_evaluation_loops);
-  void notify_actions_processed();
-  void notify_pop_processed();
-  /* --- OPTIMIZATION HOOKS --- */
+  bool configure_trainer(int action_count, int q_set_size);
+  bool configure_environment(
+    int state_size, double state_mean, double state_stddev,
+    int action_size, double action_mean, double action_stddev
+  );
+  bool configure_network(int input_size, PackedInt32Array layer_numbers, double expected_input_range);
 
-  /* +++ NETWORK_HANDLING +++ */
-  bool create_network(int input_size, PoolVector<int> layer_numbers, double expected_input_range);
-  /* TODO#2: include PoolVector<rafko_net::Transfer_functions> layer_functions */
-  /* TODO#1: Load and save network */
-  void start_optimization();
-  void stop_optimization();
-  PoolRealArray calculate(PoolRealArray network_input, bool reset);
-  /* --- NETWORK_HANDLING --- */
+  PackedFloat32Array calculate(PackedFloat32Array network_input, bool reset);
 
-  StringName get_latest_error_message(){
-    return StringName(latest_error_message.c_str());
+  void iterate(int discovery_length, float exploration_ratio, int training_epochs){
+    if(!network_matches_environment()){
+      log_error("Network and environment sizes don't match!");
+      return;
+    }
+
+    if(!m_trainer){
+      log_error("Tried to use a non-existing trainer!");
+      return;
+    }
+
+    m_trainer->iterate(discovery_length, exploration_ratio, training_epochs);
+    m_solverDeprecated = true;
+  } 
+
+  StringName get_latest_error(){
+    return StringName(m_lastErrorMessage.c_str());
+  }
+  void reset_environment(){
+    get_script_instance()->call(StringName("reset_environment"));    
   }
 
-  RafkoGlue():optimize_thread(&RafkoGlue::optimize_thread_function, this){
-    /* TODO#3: Use arenas: (void)context.set_arena_ptr(&arena); */
-    environment = std::make_unique<RafkoGlueEnvironment>(*this);
+  PackedFloat32Array feed_current_state() const{ // might return with a vector of size 0
+    return get_script_instance()->call(StringName("feed_current_state"));    
   }
-  ~RafkoGlue();
 
-  static PoolRealArray toPoolArray(const std::vector<double> vec);
-  static std::vector<double> toStdVec(const PoolRealArray arr);
+  Dictionary feed_next_state(PackedFloat32Array action){ // needs to return with an array, a q value and a terminal flag
+    return get_script_instance()->call(StringName("feed_next_state"));        
+  }
+  
+  Dictionary feed_consequences(PackedFloat32Array state, PackedFloat32Array action) const{
+    return get_script_instance()->call(StringName("feed_consequences"));        
+  }
 
 protected:
   static void _bind_methods();
+
+  void log_error(std::string err){
+    ++m_errorCount;
+    m_lastErrorMessage = "error[" + std::string(std::to_string(m_errorCount)) + "]:" + err;
+  }
+
 private:
-  /* TODO#3: Use arenas: google::protobuf::Arena arena; */
-  rafko_mainframe::RafkoServiceContext context;
-  std::unique_ptr<RafkoGlueEnvironment> environment;
+  rafko_net::RafkoNet* m_networkPtr = nullptr;
+  std::shared_ptr<RafQEnvironment> m_environment;
+  std::shared_ptr<rafko_gym::RafkoObjective> m_objective = std::make_shared<rafko_gym::RafkoCost>(
+    *m_settings, rafko_gym::cost_function_mse
+  );  
+  std::unique_ptr<rafko_gym::RafQTrainer> m_trainer;
+  std::shared_ptr<rafko_net::SolutionSolver> m_agent;
+  bool m_solverDeprecated = true;
+  std::string m_lastErrorMessage;
+  int m_errorCount = 0;
 
-  std::mutex network_mutex;
-  std::unique_ptr<rafko_net::RafkoNet> network;
-
-  std::unique_ptr<rafko_gym::RafkoNetApproximizer> optimizer;
-  std::unique_ptr<rafko_net::Solution> solution;
-  std::unique_ptr<rafko_net::SolutionSolver> solver;
-  std::string latest_error_message;
-  int error_count;
-  bool eval_params_set = false;
-
-  std::mutex optimization_control_mutex;
-  std::condition_variable synchroniser;
-  bool solver_deprecated = true;
-  bool do_optimization = false;
-  bool optimization_in_progress = false;
-  bool continue_running = true;
-
-  std::thread optimize_thread;
-
-  void optimize_thread_function();
-
-  void refresh_solver();
-  void store_error(std::string err){
-    ++error_count;
-    latest_error_message = "error[" + std::string(std::to_string(error_count)) + "]:" + err;
+  bool network_matches_environment() const{
+    return (
+      static_cast<bool>(m_environment) && m_networkPtr
+      &&(m_environment->state_size() == m_networkPtr->input_data_size())
+      &&(m_environment->action_size() == m_networkPtr->output_neuron_number())
+    );
   }
 
-  bool ready(){ /* Returns with true if everything is set to optimize! */
-    return(eval_params_set && network && optimizer);
-  }
+  class Environment : public RafQEnvironment{
+  public:
+    Environment(
+      RafkoGlue& parent,
+      int state_size, double state_mean, double state_stddev,
+      int action_size, double action_mean, double action_stddev
+    )
+    : RafQEnvironment(state_size, action_size, {state_mean, state_stddev}, {action_mean, action_stddev})
+    , m_parent(parent)
+    {
+
+    }
+    void reset() override{
+      m_parent.reset_environment();
+    }
+    MaybeFeatureVector current_state() const override;
+    StateTransition next(FeatureView action) override;
+    StateTransition next(FeatureView state, FeatureView action) const override;
+  private:
+    RafkoGlue& m_parent;
+    mutable FeatureVector m_currentStateBuffer; //TODO: Guard against multithreaded access?
+    mutable FeatureVector m_queryStateBuffer;
+  };
 };
 
 #endif /* RAFKO_GLUE_H */

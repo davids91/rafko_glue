@@ -1,12 +1,15 @@
 #include "register_types.h"
 
-#include "core/class_db.h"
+#include "core/object/class_db.h"
 #include "rafko_glue.h"
 
-void register_rafko_glue_types() {
+void initialize_rafko_glue_module(ModuleInitializationLevel p_level) {
+  if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
+    return;
+  }
   ClassDB::register_class<RafkoGlue>();
 }
 
-void unregister_rafko_glue_types() {
-   // Nothing to do here in this example.
+void uninitialize_rafko_glue_module(ModuleInitializationLevel p_level) {
+
 }
