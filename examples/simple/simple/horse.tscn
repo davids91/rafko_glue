@@ -1,72 +1,43 @@
-[gd_scene load_steps=8 format=3 uid="uid://boxriwxwim5gy"]
+[gd_scene load_steps=7 format=3 uid="uid://boxriwxwim5gy"]
 
 [ext_resource type="Script" path="res://RafkoGlueScript.gd" id="2_c4xq6"]
-[ext_resource type="Texture2D" uid="uid://htxjdtt8rla7" path="res://x-mark-3-xxl.png" id="3_i0way"]
-[ext_resource type="PackedScene" uid="uid://b20yoyor3xe66" path="res://knee.tscn" id="4_0mon5"]
-[ext_resource type="Texture2D" uid="uid://cygq5jl3sxlps" path="res://x-mark-xxl.png" id="4_ojdyu"]
-[ext_resource type="Script" path="res://horse_manual.gd" id="4_ovji4"]
+[ext_resource type="Script" path="res://Camera2D.gd" id="3_wmauv"]
+[ext_resource type="PackedScene" uid="uid://dxvhcdhgadry6" path="res://horse_body.tscn" id="4_rg3cl"]
+[ext_resource type="PackedScene" uid="uid://cvwsbljdiiwed" path="res://hud.tscn" id="7_urtdb"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_rvshr"]
-size = Vector2(100000, 20)
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_8d5n4"]
+size = Vector2(1e+07, 50)
 
-[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_ahici"]
-radius = 40.0
-height = 200.0
+[sub_resource type="WorldBoundaryShape2D" id="WorldBoundaryShape2D_4hbgy"]
 
 [node name="Node2D" type="Node2D"]
 
 [node name="Ground" type="StaticBody2D" parent="."]
-position = Vector2(7, 24)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Ground"]
 position = Vector2(-7, -13)
-shape = SubResource("RectangleShape2D_rvshr")
+shape = SubResource("RectangleShape2D_8d5n4")
+
+[node name="TestGround" type="StaticBody2D" parent="."]
+position = Vector2(-21, 585)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TestGround"]
+position = Vector2(-7, -13)
+shape = SubResource("WorldBoundaryShape2D_4hbgy")
 
 [node name="RafkoGlue" type="RafkoGlue" parent="."]
 script = ExtResource("2_c4xq6")
 
+[node name="testHorse" parent="." instance=ExtResource("4_rg3cl")]
+position = Vector2(-1080, 337)
+
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(-12.2962, -217.934)
+position = Vector2(-466, -69)
 rotation = -1.12597
 current = true
+script = ExtResource("3_wmauv")
 
-[node name="marker" type="Sprite2D" parent="."]
-visible = false
-scale = Vector2(0.2, 0.2)
-texture = ExtResource("3_i0way")
+[node name="Horse" parent="." instance=ExtResource("4_rg3cl")]
+position = Vector2(-447, -200)
 
-[node name="jmarker" type="Sprite2D" parent="."]
-visible = false
-position = Vector2(-181, -151)
-scale = Vector2(0.2, 0.2)
-texture = ExtResource("4_ojdyu")
-
-[node name="Horse" type="Node2D" parent="."]
-script = ExtResource("4_ovji4")
-
-[node name="Body" type="RigidBody2D" parent="Horse"]
-position = Vector2(25, -103)
-
-[node name="backJoint" type="PinJoint2D" parent="Horse/Body"]
-position = Vector2(-127, -167)
-rotation = -1.46194
-node_a = NodePath("..")
-node_b = NodePath("../../backLeg")
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Horse/Body"]
-position = Vector2(-49, -144)
-rotation = 1.57621
-shape = SubResource("CapsuleShape2D_ahici")
-
-[node name="frontJoint" type="PinJoint2D" parent="Horse/Body"]
-position = Vector2(18, -169)
-rotation = -1.46194
-node_a = NodePath("..")
-node_b = NodePath("../../frontLeg")
-
-[node name="backLeg" parent="Horse" instance=ExtResource("4_0mon5")]
-position = Vector2(-166, -208)
-
-[node name="frontLeg" parent="Horse" instance=ExtResource("4_0mon5")]
-position = Vector2(100, -198)
-rotation = -1.46194
+[node name="HUD" parent="." instance=ExtResource("7_urtdb")]

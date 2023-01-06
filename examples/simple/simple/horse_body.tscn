@@ -1,0 +1,93 @@
+[gd_scene load_steps=7 format=3 uid="uid://dxvhcdhgadry6"]
+
+[ext_resource type="Script" path="res://horse_manual.gd" id="1_o2m5k"]
+[ext_resource type="Script" path="res://resetable.gd" id="2_ag72u"]
+[ext_resource type="Script" path="res://kneejointscript.gd" id="3_agiui"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_ahici"]
+radius = 40.0
+height = 200.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_c6fvj"]
+size = Vector2(110, 20)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_uuctw"]
+size = Vector2(100, 20)
+
+[node name="Horse" type="Node2D"]
+script = ExtResource("1_o2m5k")
+
+[node name="Body" type="RigidBody2D" parent="." groups=["bodies"]]
+position = Vector2(-3, 1)
+script = ExtResource("2_ag72u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Body"]
+position = Vector2(-1, 2.00003)
+rotation = 1.57621
+shape = SubResource("CapsuleShape2D_ahici")
+
+[node name="backJoint" type="PinJoint2D" parent="Body" groups=["joints"]]
+position = Vector2(-80, -15)
+rotation = -1.46194
+node_a = NodePath("..")
+node_b = NodePath("../../BackLeg")
+script = ExtResource("3_agiui")
+
+[node name="frontJoint" type="PinJoint2D" parent="Body" groups=["joints"]]
+position = Vector2(72, -16)
+rotation = -1.46194
+node_a = NodePath("..")
+node_b = NodePath("../../FrontLeg")
+script = ExtResource("3_agiui")
+
+[node name="FrontLeg" type="RigidBody2D" parent="." groups=["bodies"]]
+position = Vector2(98, 18)
+script = ExtResource("2_ag72u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FrontLeg"]
+position = Vector2(-2, 2)
+rotation = -2.177
+shape = SubResource("RectangleShape2D_c6fvj")
+
+[node name="kneejoint" type="PinJoint2D" parent="FrontLeg" groups=["joints"]]
+position = Vector2(24.1903, 38.1758)
+rotation = -1.59077
+node_a = NodePath("../../LowerFrontLeg")
+node_b = NodePath("..")
+softness = 1.0
+script = ExtResource("3_agiui")
+
+[node name="LowerFrontLeg" type="RigidBody2D" parent="." groups=["bodies"]]
+position = Vector2(125, 98)
+rotation = -1.58091
+script = ExtResource("2_ag72u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LowerFrontLeg"]
+position = Vector2(-1.09237, 0.376282)
+shape = SubResource("RectangleShape2D_uuctw")
+
+[node name="BackLeg" type="RigidBody2D" parent="." groups=["bodies"]]
+position = Vector2(-163, 42)
+script = ExtResource("2_ag72u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BackLeg"]
+position = Vector2(46, -27)
+rotation = -0.747067
+shape = SubResource("RectangleShape2D_c6fvj")
+
+[node name="kneejoint2" type="PinJoint2D" parent="BackLeg" groups=["joints"]]
+position = Vector2(14, 5.99999)
+rotation = -1.12597
+node_a = NodePath("../../LowerBackLeg")
+node_b = NodePath("..")
+softness = 1.0
+script = ExtResource("3_agiui")
+
+[node name="LowerBackLeg" type="RigidBody2D" parent="." groups=["bodies"]]
+position = Vector2(-152, 97)
+rotation = -1.55075
+script = ExtResource("2_ag72u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LowerBackLeg"]
+position = Vector2(6.29102, 0.650482)
+shape = SubResource("RectangleShape2D_uuctw")

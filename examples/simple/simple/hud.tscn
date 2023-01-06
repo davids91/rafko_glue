@@ -1,0 +1,142 @@
+[gd_scene load_steps=8 format=3 uid="uid://cvwsbljdiiwed"]
+
+[ext_resource type="Script" path="res://iterateBtn.gd" id="1_mfc1b"]
+[ext_resource type="Script" path="res://actionTestBtn.gd" id="2_cuj3b"]
+[ext_resource type="Script" path="res://reset.gd" id="2_rswva"]
+[ext_resource type="Script" path="res://lrSlider.gd" id="4_7551t"]
+[ext_resource type="Script" path="res://Dbg.gd" id="4_gsfhu"]
+[ext_resource type="Script" path="res://Load.gd" id="5_i0kch"]
+[ext_resource type="Script" path="res://Save.gd" id="6_nm1xo"]
+
+[node name="HUD" type="CanvasLayer"]
+
+[node name="iterateBtn" type="Button" parent="."]
+offset_left = 173.0
+offset_top = 3.0
+offset_right = 234.0
+offset_bottom = 34.0
+text = "Iterate ( count-->)"
+script = ExtResource("1_mfc1b")
+
+[node name="resetBtn" type="Button" parent="."]
+offset_right = 155.0
+offset_bottom = 31.0
+text = "Reset Environment"
+script = ExtResource("2_rswva")
+
+[node name="actionTestBtn" type="Button" parent="."]
+offset_left = 4.0
+offset_top = 35.0
+offset_right = 142.0
+offset_bottom = 66.0
+text = "Apply test action"
+script = ExtResource("2_cuj3b")
+
+[node name="TrainingEpochs" type="TextEdit" parent="."]
+offset_left = 268.0
+offset_top = 103.0
+offset_right = 451.0
+offset_bottom = 134.0
+text = "100"
+
+[node name="IterationCount" type="TextEdit" parent="."]
+offset_left = 333.0
+offset_top = 9.0
+offset_right = 516.0
+offset_bottom = 41.0
+text = "10000"
+
+[node name="ExploreSteps" type="TextEdit" parent="."]
+offset_left = 267.0
+offset_top = 70.0
+offset_right = 450.0
+offset_bottom = 100.0
+text = "500"
+
+[node name="LRLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 142.0
+offset_right = 133.0
+offset_bottom = 168.0
+text = "Learning Rate
+"
+
+[node name="LRValueLabel" type="Label" parent="."]
+offset_left = 453.0
+offset_top = 143.0
+offset_right = 576.0
+offset_bottom = 169.0
+text = "Learning Rate
+"
+
+[node name="lrSlider" type="HSlider" parent="."]
+offset_left = 138.0
+offset_top = 146.0
+offset_right = 441.0
+offset_bottom = 162.0
+step = 0.05
+value = 55.0
+script = ExtResource("4_7551t")
+
+[node name="exploreSlider" type="HSlider" parent="."]
+offset_left = 259.0
+offset_top = 48.0
+offset_right = 562.0
+offset_bottom = 64.0
+max_value = 1.0
+step = 0.05
+value = 0.5
+
+[node name="Exploration" type="Label" parent="."]
+offset_left = 575.0
+offset_top = 44.0
+offset_right = 664.0
+offset_bottom = 70.0
+text = "Exploration"
+
+[node name="Exploitation" type="Label" parent="."]
+offset_left = 166.0
+offset_top = 42.0
+offset_right = 259.0
+offset_bottom = 68.0
+text = "Exploitation"
+
+[node name="Training Epochs" type="Label" parent="."]
+offset_left = 138.0
+offset_top = 107.0
+offset_right = 261.0
+offset_bottom = 133.0
+text = "Training epochs"
+
+[node name="Explore steps" type="Label" parent="."]
+offset_left = 156.0
+offset_top = 73.0
+offset_right = 260.0
+offset_bottom = 99.0
+text = "Explore steps
+"
+
+[node name="Load" type="Button" parent="."]
+offset_left = 6.0
+offset_top = 71.0
+offset_right = 64.0
+offset_bottom = 102.0
+text = "Load network"
+script = ExtResource("5_i0kch")
+
+[node name="Save" type="Button" parent="."]
+offset_left = 6.0
+offset_top = 109.0
+offset_right = 121.0
+offset_bottom = 140.0
+text = "Save network"
+script = ExtResource("6_nm1xo")
+
+[node name="Dbg" type="Button" parent="."]
+offset_left = 532.0
+offset_top = 11.0
+offset_right = 590.0
+offset_bottom = 42.0
+text = "Debug
+"
+script = ExtResource("4_gsfhu")

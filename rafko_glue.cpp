@@ -3,6 +3,8 @@
 #include <vector>
 #include <cmath>
 #include <optional>
+#include <iostream>
+#include <fstream>
 
 #include "rafko_net/services/rafko_net_builder.hpp"
 #include "rafko_net/services/solution_builder.hpp"
@@ -34,6 +36,15 @@ void RafkoGlue::_bind_methods() {
   ClassDB::bind_method(D_METHOD("feed_current_state"), &RafkoGlue::feed_current_state);
   ClassDB::bind_method(D_METHOD("feed_next_state"), &RafkoGlue::feed_next_state);
   ClassDB::bind_method(D_METHOD("feed_consequences"), &RafkoGlue::feed_consequences);
+  ClassDB::bind_method(D_METHOD("get_latest_error"), &RafkoGlue::get_latest_error);
+  ClassDB::bind_method(D_METHOD("progress_callback"), &RafkoGlue::progress_callback);
+  ClassDB::bind_method(D_METHOD("full_evaluation"), &RafkoGlue::full_evaluation);
+  ClassDB::bind_method(D_METHOD("get_q_set_size"), &RafkoGlue::get_q_set_size);
+  ClassDB::bind_method(D_METHOD("get_q_set_label"), &RafkoGlue::get_q_set_label);
+  ClassDB::bind_method(D_METHOD("get_q_set_input"), &RafkoGlue::get_q_set_input);
+  ClassDB::bind_method(D_METHOD("set_learning_rate"), &RafkoGlue::set_learning_rate);
+  ClassDB::bind_method(D_METHOD("save_network"), &RafkoGlue::save_network);
+  ClassDB::bind_method(D_METHOD("load_network"), &RafkoGlue::load_network);
 }
 
 bool RafkoGlue::configure_network(int input_size, PackedInt32Array layer_numbers, double expected_input_range) {
@@ -52,17 +63,13 @@ bool RafkoGlue::configure_network(int input_size, PackedInt32Array layer_numbers
   .input_size(input_size)
   .expected_input_range(std::abs(expected_input_range))
   .allowed_transfer_functions_by_layer(layer_transfers);
-  if(m_networkPtr)
+
+  if(!m_networkPtr)
     m_networkPtr = network_builder.create_layers(layer_structure);
-    else network_builder.build_create_layers_and_swap(m_networkPtr, layer_structure);
+    else network_builder.create_layers_and_swap(m_networkPtr, layer_structure);
 
   m_solverDeprecated = true;
-
-  if(m_environment){
-    bool retval = network_matches_environment();
-    if(!retval)log_error("Network and environment sizes don't match!");
-    return retval;
-  }
+  //TODO: handle if there's an environment or trainer already
   return true;
 }
 
@@ -74,24 +81,57 @@ bool RafkoGlue::configure_environment(
     *this, state_size, state_mean, state_stddev,
     action_size, action_mean, action_stddev
   );
-  if(m_networkPtr){
-    bool retval = network_matches_environment();
-    if(!retval)log_error("Network and environment sizes don't match!");
-    return retval;
-  }
   return static_cast<bool>(m_environment);
 }
 
 
 bool RafkoGlue::configure_trainer(int action_count, int q_set_size){
-  if(!network_matches_environment()){
-    log_error("Network and environment sizes don't match!");
+  std::size_t feature_size = 0;
+  if(m_environment){
+    feature_size = action_count * (m_environment->action_size() + 1);
+  }
+  if(feature_size != m_networkPtr->output_neuron_number()){
+    log_error(
+      "Network and environment sizes don't match: feature:" + std::to_string(feature_size) 
+      + " vs network output:" + std::to_string(m_networkPtr->output_neuron_number())
+    );
     return false;
   }
   m_trainer = std::make_unique<rafko_gym::RafQTrainer>(
     *m_networkPtr, action_count, q_set_size, m_environment, m_objective, m_settings
   );
+  m_trainer->set_weight_updater(rafko_gym::weight_updater_amsgrad);
   return true;
+}
+
+void RafkoGlue::save_network(){
+  if(!m_networkPtr){
+    log_error("Can't save a non-existent Network!");
+    return;
+  }
+
+  std::filebuf file_buffer;
+  file_buffer.open("network.rfnet", std::ios::out);
+  std::ostream os(&file_buffer);
+  m_networkPtr->SerializeToOstream(&os);
+  file_buffer.close();
+}
+
+void RafkoGlue::load_network(){
+  std::filebuf file_buffer;
+  file_buffer.open("network.rfnet", std::ios::in);
+
+  if(!file_buffer.is_open()){
+    log_error("Can't load a non-existent Network!");
+    return;
+  }
+  
+  std::istream is(&file_buffer);
+  m_networkPtr->ParseFromIstream(&is);
+  file_buffer.close();
+
+  m_trainer.reset();
+  m_solverDeprecated = true;
 }
 
 PackedFloat32Array RafkoGlue::calculate(PackedFloat32Array network_input, bool reset){
@@ -114,6 +154,22 @@ PackedFloat32Array RafkoGlue::calculate(PackedFloat32Array network_input, bool r
   }
 
   return toPoolArray(m_agent->solve(toStdVec(network_input), reset).acquire());
+}
+
+PackedFloat32Array RafkoGlue::get_q_set_input(int index) const{
+  if(!m_trainer || static_cast<int>(m_trainer->q_set().get_number_of_input_samples()) <= index){
+    log_error("Q set Unavailable or index out of bounds!");
+    return PackedFloat32Array();
+  }
+  return toPoolArray(m_trainer->q_set().get_input_sample(index));
+}
+
+PackedFloat32Array RafkoGlue::get_q_set_label(int index) const{
+  if(!m_trainer || static_cast<int>(m_trainer->q_set().get_number_of_label_samples()) <= index){
+    log_error("Q set Unavailable or index out of bounds!");
+    return PackedFloat32Array();
+  }
+  return toPoolArray(m_trainer->q_set().get_label_sample(index));
 }
 
 RafkoGlue::Environment::MaybeFeatureVector RafkoGlue::Environment::current_state() const{
