@@ -8,4 +8,4 @@ func _ready():
 func _pressed():
 	print("Loading Network..")
 	ob.load_network()
-	print(ob.get_latest_error())
+	ob.configure_env_and_trainer()

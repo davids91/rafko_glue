@@ -12,7 +12,7 @@ const q_set_size = 5000
 const expected_max_y = 500
 const expected_max_linear_velocity = 1500
 const expected_max_angular_velocity = 20
-const action_range = 15
+const action_range = 20
 
 var expected_max_bodypart_distance
 var start_state = []
@@ -104,7 +104,16 @@ func reset_environment():
 	set_state(horse, start_state)
 
 func feed_current_state():
-	var current_state = get_state(horse)
+	var current_state = Dictionary()	
+	current_state["state"] = get_state(horse)
+
+	var ob = horse.get_node("Body")
+	var y = -ob.get_global_position().y
+	var q_value = -ob.get_linear_velocity().x  / expected_max_linear_velocity
+	q_value = q_value - (y - max(y, 150.0)) / 150.0
+
+	current_state["terminal"] = (y < 80)
+	current_state["q-value"] = q_value
 	return current_state
 
 func feed_next_state(action):
@@ -170,10 +179,19 @@ func init_simu():
 	start_state = get_state(horse)
 	jail_state = get_state(test_horse)
 	temp_state = start_state
-	configure_network(state_policy_size, [10, action_policy_size], 1)
-	configure_environment(state_policy_size, 0.5, 0.5, joint_count, 0.0, 1.0)
-	configure_trainer(actions_for_state, q_set_size)
+	if !configure_network(state_policy_size, [10, action_policy_size], 1):
+		print("Unable to configure network!")
+		
+	configure_env_and_trainer()
+
 	print(get_latest_error())
+	
+func configure_env_and_trainer():
+	if !configure_environment(state_policy_size, 0.5, 0.5, joint_count, 0.0, 1.0):
+		print("Unable to configure Environment!")
+				
+	if !configure_trainer(actions_for_state, q_set_size):
+		print("Unable to configure trainer!")
 	
 var delayed_start_thread
 #Input: position, rotation and velocities for each leg; body position without x

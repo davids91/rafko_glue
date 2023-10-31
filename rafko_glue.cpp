@@ -32,12 +32,7 @@ void RafkoGlue::_bind_methods() {
   ClassDB::bind_method(D_METHOD("configure_trainer"), &RafkoGlue::configure_trainer);
   ClassDB::bind_method(D_METHOD("calculate"), &RafkoGlue::calculate);
   ClassDB::bind_method(D_METHOD("iterate"), &RafkoGlue::iterate);
-  ClassDB::bind_method(D_METHOD("reset_environment"), &RafkoGlue::reset_environment);
-  ClassDB::bind_method(D_METHOD("feed_current_state"), &RafkoGlue::feed_current_state);
-  ClassDB::bind_method(D_METHOD("feed_next_state"), &RafkoGlue::feed_next_state);
-  ClassDB::bind_method(D_METHOD("feed_consequences"), &RafkoGlue::feed_consequences);
   ClassDB::bind_method(D_METHOD("get_latest_error"), &RafkoGlue::get_latest_error);
-  ClassDB::bind_method(D_METHOD("progress_callback"), &RafkoGlue::progress_callback);
   ClassDB::bind_method(D_METHOD("full_evaluation"), &RafkoGlue::full_evaluation);
   ClassDB::bind_method(D_METHOD("get_q_set_size"), &RafkoGlue::get_q_set_size);
   ClassDB::bind_method(D_METHOD("get_q_set_label"), &RafkoGlue::get_q_set_label);
@@ -147,12 +142,10 @@ PackedFloat32Array RafkoGlue::calculate(PackedFloat32Array network_input, bool r
     );
     return PackedFloat32Array();
   }
-
   if(m_solverDeprecated){
     m_agent = rafko_net::SolutionSolver::Factory(*m_networkPtr, m_settings).build();
     m_solverDeprecated = false;
   }
-
   return toPoolArray(m_agent->solve(toStdVec(network_input), reset).acquire());
 }
 
@@ -172,18 +165,18 @@ PackedFloat32Array RafkoGlue::get_q_set_label(int index) const{
   return toPoolArray(m_trainer->q_set().get_label_sample(index));
 }
 
-RafkoGlue::Environment::MaybeFeatureVector RafkoGlue::Environment::current_state() const{
-  PackedFloat32Array data = m_parent.feed_current_state();
-  if(0 == data.size())
-    return {};
-    else{
-      m_currentStateBuffer = toStdVec(data);
-      return {m_currentStateBuffer};
-    }
+static rafko_gym::RafQEnvironment::FeatureVector s_buf;
+RafkoGlue::Environment::StateTransition RafkoGlue::Environment::current_state() const{
+  Dictionary data = m_parent.feed_current_state__();
+  s_buf = toStdVec(static_cast<PackedFloat32Array>(data["state"]));
+  MaybeFeatureVector state;
+  state.emplace(s_buf);
+  if(0 == data.size()) return {};
+  return {state, static_cast<double>(data["q-value"]), static_cast<bool>(data["terminal"])};
 }
 
 RafkoGlue::Environment::StateTransition RafkoGlue::Environment::next(FeatureView action){
-  Dictionary data = m_parent.feed_next_state(toPoolArray(action.acquire()));
+  Dictionary data = m_parent.feed_next_state__(toPoolArray(action.acquire()));
   MaybeFeatureVector next_state;
   if(0 < static_cast<PackedFloat32Array>(data["state"]).size()){
     m_currentStateBuffer = toStdVec(static_cast<PackedFloat32Array>(data["state"]));
@@ -192,8 +185,8 @@ RafkoGlue::Environment::StateTransition RafkoGlue::Environment::next(FeatureView
   return {next_state, static_cast<double>(data["q-value"]), static_cast<bool>(data["terminal"])};
 }
 
-RafkoGlue::Environment::StateTransition RafkoGlue::Environment::next(FeatureView state, FeatureView action) const{
-  Dictionary data = m_parent.feed_consequences(toPoolArray(state.acquire()), toPoolArray(action.acquire()));
+RafkoGlue::Environment::StateTransition RafkoGlue::Environment::next(FeatureView state, FeatureView action, const AnyData &user_data) const{
+  Dictionary data = m_parent.feed_consequences__(toPoolArray(state.acquire()), toPoolArray(action.acquire()));
   MaybeFeatureVector next_state;
   if(0 < static_cast<PackedFloat32Array>(data["state"]).size()){
     m_queryStateBuffer = toStdVec(static_cast<PackedFloat32Array>(data["state"]));

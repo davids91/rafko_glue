@@ -60,20 +60,26 @@ public:
     return m_trainer->full_evaluation(force_gpu_upload);
   }
 
-  void progress_callback(double progress, int step){
+  void progress_callback__(double progress, int step){
     get_script_instance()->call(StringName("progress_callback"), progress, step);  
   }
 
   void iterate(int discovery_length, float exploration_ratio, int training_epochs){
     if(!network_matches_environment()){
-      std::string detail_string;
-      if(m_trainer && m_networkPtr)
-        detail_string = (
-          ": " + std::to_string(m_trainer->q_set().get_feature_size()) 
-          + "<>" + std::to_string(m_networkPtr->output_neuron_number())
+      std::string network_input_size;
+      if(m_networkPtr){
+        network_input_size = (
+          "network: "
+          + std::to_string(m_networkPtr->output_neuron_number())
+          + "/" + std::to_string(m_networkPtr->output_neuron_number())
         );
-        else detail_string = "!";
-      log_error("Network and environment sizes don't match" + detail_string);
+      }else network_input_size = "?/?";
+
+      std::string trainer_size;
+      if(m_trainer)
+        trainer_size = std::to_string(m_trainer->q_set().get_feature_size());
+        else trainer_size = "?";
+      log_error("Network and environment sizes don't match: " + network_input_size + "<>" + trainer_size);
       return;
     }
 
@@ -84,7 +90,7 @@ public:
 
     m_trainer->iterate(
       discovery_length, exploration_ratio, training_epochs,
-      [this](double progress, std::uint32_t step){ progress_callback(progress, step); }
+      [this](double progress, std::uint32_t step){ progress_callback__(progress, step); }
     );
     m_solverDeprecated = true;
   } 
@@ -104,20 +110,20 @@ public:
   PackedFloat32Array get_q_set_input(int index) const;
   PackedFloat32Array get_q_set_label(int index) const;
 
-  void reset_environment(){
-    get_script_instance()->call(StringName("reset_environment"));    
+  void reset_environment__(){
+    get_script_instance()->call(StringName("reset_environment"));
   }
 
-  PackedFloat32Array feed_current_state() const{ // might return with a vector of size 0
-    return get_script_instance()->call(StringName("feed_current_state"));    
+  Dictionary feed_current_state__() const{ // might return with a vector of size 0
+    return get_script_instance()->call(StringName("feed_current_state"));
   }
 
-  Dictionary feed_next_state(PackedFloat32Array action){ // needs to return with an array, a q value and a terminal flag
+  Dictionary feed_next_state__(PackedFloat32Array action){ // needs to return with an array, a q value and a terminal flag
     return get_script_instance()->call(StringName("feed_next_state"), action);
   }
   
-  Dictionary feed_consequences(PackedFloat32Array state, PackedFloat32Array action) const{
-    return get_script_instance()->call(StringName("feed_consequences"), state, action);        
+  Dictionary feed_consequences__(PackedFloat32Array state, PackedFloat32Array action) const{
+    return get_script_instance()->call(StringName("feed_consequences"), state, action);
   }
 
 protected:
@@ -164,11 +170,11 @@ private:
 
     }
     void reset() override{
-      m_parent.reset_environment();
+      m_parent.reset_environment__();
     }
-    MaybeFeatureVector current_state() const override;
+    StateTransition current_state() const override;
     StateTransition next(FeatureView action) override;
-    StateTransition next(FeatureView state, FeatureView action) const override;
+    StateTransition next(FeatureView state, FeatureView action, const AnyData &user_data = {}) const override;
   private:
     RafkoGlue& m_parent;
     mutable FeatureVector m_currentStateBuffer; //TODO: Guard against multithreaded access?

@@ -21,12 +21,11 @@ func apply_action():
 		if apply:
 			var action = []
 		#	print("Latest error: \n", ob.get_latest_error())
-			var nn_result = ob.calculate(ob.feed_current_state(), false)
+			var nn_result = ob.calculate(ob.feed_current_state()["state"], false)
 	#		print(ob.get_latest_error())
 			for i in 4:
-#				action.push_back(rng.randf_range(-1, 1))	
+				#action.push_back(rng.randf_range(-1, 1))	
 				action.push_back(nn_result[i])	
-			print("action: ", action)
 			ob.apply_action(hors, action)
 			OS.delay_msec(50)
 
