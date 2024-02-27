@@ -3,6 +3,7 @@ extends Button
 var thread = Thread.new()
 
 func iterate_once():
+	Thread.set_thread_safety_checks_enabled(false)
 	var iteration_count = int(get_parent().get_node("IterationCount").get_text())
 	var ob = get_parent().get_parent().get_node("RafkoGlue")
 
@@ -17,6 +18,7 @@ func iterate_once():
 		" Error: ", ob.full_evaluation(true), \
 		" Q-set size: ", ob.get_q_set_size()
 		)
+		ob.save_network()
 
 func _pressed():
 	if thread.is_started():	

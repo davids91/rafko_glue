@@ -103,6 +103,10 @@ func reset_environment():
 	set_state(test_horse, jail_state)
 	set_state(horse, start_state)
 
+var glob_angle_modif = 0
+func get_angle_modif():
+	return glob_angle_modif
+
 func feed_current_state():
 	var current_state = Dictionary()	
 	current_state["state"] = get_state(horse)
@@ -111,6 +115,10 @@ func feed_current_state():
 	var y = -ob.get_global_position().y
 	var q_value = -ob.get_linear_velocity().x  / expected_max_linear_velocity
 	q_value = q_value - (y - max(y, 150.0)) / 150.0
+	var angle_modif = 1.0 - abs(ob.transform.get_rotation())
+	q_value = angle_modif * q_value
+	glob_angle_modif = angle_modif
+	#TODO: Add body angle as qvalue
 
 	current_state["terminal"] = (y < 80)
 	current_state["q-value"] = q_value
@@ -124,6 +132,8 @@ func feed_next_state(action):
 	var y = -ob.get_global_position().y
 	var q_value = -ob.get_linear_velocity().x  / expected_max_linear_velocity
 	q_value = q_value - (y - max(y, 150.0)) / 150.0
+	var angle_modif = 1.0 - abs(ob.transform.get_rotation())
+	q_value = angle_modif * q_value
 
 	var result_state = Dictionary()	
 	result_state["state"] = feed_current_state()
@@ -171,6 +181,7 @@ func feed_consequences(state, action):
 	return consequence_state
 	
 func init_simu():
+	Thread.set_thread_safety_checks_enabled(false)
 #	OS.delay_msec(1500)
 	var ob = horse.get_node("Body")
 	var ob2 = horse.get_node("LowerBackLeg")

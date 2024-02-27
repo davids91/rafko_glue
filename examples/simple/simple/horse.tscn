@@ -34,7 +34,6 @@ position = Vector2(-1080, 337)
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(-466, -69)
 rotation = -1.12597
-current = true
 script = ExtResource("3_wmauv")
 
 [node name="Horse" parent="." instance=ExtResource("4_rg3cl")]

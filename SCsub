@@ -1,6 +1,10 @@
 Import('env')
 
 module_env = env.Clone()
+#module_env["CXXFLAGS"].remove("-fno-exceptions")
+#module_env["CXXFLAGS"].append("-fexceptions")
+#module_env["disable_exceptions"] = False
+
 module_env.add_source_files(env.modules_sources, "*.cpp") # Add all cpp files to the build
 module_env.Append(CPPPATH=["lib/rafko/include"]) # this is a relative path
 

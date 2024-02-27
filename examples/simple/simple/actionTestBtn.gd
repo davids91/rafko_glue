@@ -14,6 +14,7 @@ func _ready():
 
 #TODO: switch behavior for action
 func apply_action():
+	Thread.set_thread_safety_checks_enabled(false)
 	var rng = RandomNumberGenerator.new()
 	rng.randomize()
 #	ob.reset_environment()
@@ -28,6 +29,11 @@ func apply_action():
 				action.push_back(nn_result[i])	
 			ob.apply_action(hors, action)
 			OS.delay_msec(50)
+			var t = str(hors.get_node("Body").get_position().x) + " m"
+			get_parent().get_node("ProgressLabel").set_text(t)
+			#get_parent().get_node("DebugLabel").set_text(ob.get_anlge_modif() + "")
+			#get_parent().get_node("DebugLabel").set_text("asd")
+
 
 func _pressed():
 	apply = not apply
